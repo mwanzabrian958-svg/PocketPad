@@ -1,0 +1,29 @@
+<resources>
+    <string name="app_name">PocketPad</string>
+    <string name="connect_to_pc">Connect</string>
+    <string name="controller">Controller</string>
+    <string name="settings">Settings</string>
+    <string name="link_title">Connect your gamepad</string>
+    <string name="link_subtitle">Choose how PocketPad connects to your gaming setup.</string>
+    <string name="connect">Connect</string>
+    <string name="cancel">Cancel</string>
+    <string name="ready">Ready</string>
+    <string name="needs_setup">Needs setup</string>
+    <string name="not_supported">Not supported on this phone</string>
+    <string name="pocketpad_logo_description">PocketPad controller mark</string>
+    <string name="tab_connect">Connect</string>
+    <string name="tab_controller">Controller</string>
+    <string name="tab_settings">Settings</string>
+    <string name="fix_it">Fix it</string>
+    <string name="try_another_method">Try another method</string>
+    <string name="host_address">Host address</string>
+    <string name="host_port">Port</string>
+    <string name="pairing_key">Pairing key (64 hex characters)</string>
+    <string name="scan_qr">Paste QR setup text</string>
+    <string name="scan_for_devices">Find automatically</string>
+    <string name="remember_choice">Remember my choice and reconnect automatically</string>
+    <string name="help_me_choose">Help me choose</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="connection_failed">Could not connect. Check the host address, port, and pairing key.</string>
+    <string name="connection_success">Connected to %1$s</string>
+</resources>

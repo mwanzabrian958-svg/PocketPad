@@ -1,0 +1,24 @@
+# Normalize text files in the repo to LF, check out per-platform.
+* text=auto eol=lf
+
+# Windows scripts require CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+gradlew.bat text eol=crlf
+
+# The Gradle wrapper shell script MUST stay LF or it fails on Linux/macOS
+gradlew text eol=lf
+
+# Binary files - never touch line endings
+*.jar binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.apk binary
+*.aar binary
+*.so binary
+*.keystore binary
+*.jks binary

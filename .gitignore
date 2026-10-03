@@ -1,0 +1,42 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+.kotlin/
+captures/
+.cxx/
+
+# Local machine config (contains absolute SDK path — never commit)
+local.properties
+
+# Keystores / signing material
+*.jks
+*.keystore
+keystore.properties
+key.properties
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Python companion
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.coverage
+htmlcov/
+
+# Secrets / local env
+.env
+.env.*
+!.env.example

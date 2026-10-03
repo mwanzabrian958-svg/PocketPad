@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools==75.8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pocketpad-companion"
+version = "1.0.0"
+requires-python = ">=3.10"
+description = "Local-network controller companion for PocketPad"
+dependencies = []
+
+[project.scripts]
+pocketpad-companion = "pocketpad_companion.app:main"
+
+[tool.setuptools.packages.find]
+include = ["pocketpad_companion*"]

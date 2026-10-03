@@ -1,0 +1,2 @@
+-keep class com.pocketpad.data.profile.** { *; }
+-keep class com.pocketpad.protocol.** { *; }

@@ -1,0 +1,58 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "04bc9aeb680b23647bc0736db1dd5132",
+    "entities": [
+      {
+        "tableName": "profiles",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`name` TEXT NOT NULL, `controllerMode` TEXT NOT NULL, `sensitivity` REAL NOT NULL, `deadZone` REAL NOT NULL, `layoutJson` TEXT NOT NULL, PRIMARY KEY(`name`))",
+        "fields": [
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "controllerMode",
+            "columnName": "controllerMode",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sensitivity",
+            "columnName": "sensitivity",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deadZone",
+            "columnName": "deadZone",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "layoutJson",
+            "columnName": "layoutJson",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "name"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '04bc9aeb680b23647bc0736db1dd5132')"
+    ]
+  }
+}
