@@ -20,6 +20,8 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
+        // The Hilt Gradle plugin swaps in HiltTestApplication for androidTest automatically.
+        // This must stay an Instrumentation; naming HiltTestApplication here crashes at startup.
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -68,6 +70,8 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    androidTestImplementation(libs.hilt.android.testing)
+    kspAndroidTest(libs.hilt.compiler)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
