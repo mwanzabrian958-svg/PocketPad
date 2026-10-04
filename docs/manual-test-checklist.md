@@ -33,6 +33,9 @@ This checklist requires a physical Android phone and a PC. Automated build check
 - [ ] Select the paired PC in PocketPad Bluetooth and verify buttons, sticks, and triggers in the OS game controller panel.
 - [ ] In Settings, switch between Xbox and PlayStation face-button labels; confirm TalkBack names and button positions remain correct.
 - [ ] Remap several buttons, verify output labels swap without duplicates, then save/switch profiles and confirm mappings, labels, sensitivity, and dead zone restore.
+- [ ] In Settings, set **Low-power input** on, connect over Wi-Fi, and confirm input still registers while the Companion's reported input rate drops to roughly a quarter of the normal rate.
+- [ ] With **Low-power input** on, press and release a button quickly and confirm the release is applied immediately rather than waiting for the next transmit window.
+- [ ] At several sensitivity values, push each stick fully to every edge and confirm the game still reaches full deflection, and that small motion inside the dead zone stays neutral.
 - [ ] Export the Companion log and confirm it contains recent connection/input events without pairing keys.
 
 ## Not available or hardware-dependent

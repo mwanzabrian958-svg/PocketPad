@@ -17,6 +17,7 @@ import com.pocketpad.protocol.ControllerState
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executor
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicBoolean
@@ -41,6 +42,7 @@ class BluetoothHidTransport(context: Context) : ControllerTransport {
     @Volatile private var profileReady = CompletableFuture<BluetoothHidDevice>()
     @Volatile private var registration = CompletableFuture<Unit>()
     @Volatile private var connection = CompletableFuture<Unit>()
+    private var keepAlive: java.util.concurrent.ScheduledExecutorService? = null
     private val serviceListener = object : BluetoothProfile.ServiceListener {
         override fun onServiceConnected(profileId: Int, proxy: BluetoothProfile) {
             if (profileId != BluetoothProfile.HID_DEVICE) return
@@ -130,6 +132,7 @@ class BluetoothHidTransport(context: Context) : ControllerTransport {
             }
             await(connection)
             send(currentState)
+            startKeepAlive()
             0
         } catch (error: Exception) {
             disconnect()
@@ -189,6 +192,28 @@ class BluetoothHidTransport(context: Context) : ControllerTransport {
         }
     }
 
+    /**
+     * Resends the last report at 125 Hz while connected. Bluetooth HID has no
+     * transport-level retransmit, so a dropped report would otherwise leave the
+     * host holding stale input until the next touch.
+     */
+    private fun startKeepAlive() {
+        keepAlive?.shutdownNow()
+        keepAlive = Executors.newSingleThreadScheduledExecutor { runnable ->
+            Thread(runnable, "PocketPad-Bluetooth-Input").apply { priority = Thread.MAX_PRIORITY }
+        }.also { executor ->
+            executor.scheduleAtFixedRate({
+                if (profile != null && device != null && !disconnecting) {
+                    try {
+                        send(currentState)
+                    } catch (error: Exception) {
+                        reportFailure(error)
+                    }
+                }
+            }, 8L, 8L, TimeUnit.MILLISECONDS)
+        }
+    }
+
     override fun send(state: ControllerState) {
         currentState = state
         val activeProfile = profile ?: return
@@ -204,6 +229,8 @@ class BluetoothHidTransport(context: Context) : ControllerTransport {
     }
 
     override fun disconnect() {
+        keepAlive?.shutdownNow()
+        keepAlive = null
         val hid = profile
         val target = device
         disconnecting = true
@@ -251,18 +278,20 @@ class BluetoothHidTransport(context: Context) : ControllerTransport {
         )
 
         fun encodeReport(state: ControllerState): ByteArray {
-            val normalized = state.normalized(0f)
+            // Input arrives already dead-zoned and shaped by the view model, so this only
+            // clamps the sticks and triggers into the ranges the report descriptor allows.
+            val clamped = state.shaped(0f, 1f)
             val report = ByteArray(12)
-            report[0] = normalized.buttons.toByte()
-            report[1] = (normalized.buttons ushr 8).toByte()
-            listOf(normalized.leftX, normalized.leftY, normalized.rightX, normalized.rightY)
+            report[0] = clamped.buttons.toByte()
+            report[1] = (clamped.buttons ushr 8).toByte()
+            listOf(clamped.leftX, clamped.leftY, clamped.rightX, clamped.rightY)
                 .forEachIndexed { index, value ->
                     val axis = (value.coerceIn(-1f, 1f) * 32767f).toInt()
                     report[2 + index * 2] = axis.toByte()
                     report[3 + index * 2] = (axis shr 8).toByte()
                 }
-            report[10] = (normalized.leftTrigger * 255f).toInt().toByte()
-            report[11] = (normalized.rightTrigger * 255f).toInt().toByte()
+            report[10] = (clamped.leftTrigger * 255f).toInt().toByte()
+            report[11] = (clamped.rightTrigger * 255f).toInt().toByte()
             return report
         }
 

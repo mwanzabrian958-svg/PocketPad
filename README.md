@@ -24,12 +24,14 @@ Direct PlayStation/Xbox/Switch pairing and platform Remote Play integrations, a 
 
 ## Build the Android app
 
-Install Android Studio with Android SDK platform 36, then:
+Install Android Studio with Android SDK platform 36. Build with a **JDK 17** `JAVA_HOME`; Android Gradle Plugin 8.13 and Kotlin 2.1 cannot parse a newer runtime version and fail with a bare `IllegalArgumentException: <version>`:
 
 ```powershell
-$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+$env:JAVA_HOME = "C:\Program Files\Microsoft\jdk-17.0.20.101-hotspot"
 .\gradlew.bat assembleDebug
 ```
+
+Substitute your own JDK 17 install path. Do not point `JAVA_HOME` at Android Studio's bundled `jbr`, which is Java 25 on current installs and breaks Gradle's script compilation.
 
 If the wrapper has not been generated yet, run `gradle wrapper --gradle-version 8.13` from Android Studio's Gradle installation, then use `.\gradlew.bat`. The default debug APK is written to `app\build\outputs\apk\debug\app-debug.apk`.
 
@@ -66,7 +68,7 @@ Android API 26+ is the declared minimum. Wi-Fi input requires a reachable local 
 
 ## Protocol, privacy, and manual testing
 
-See [`docs/protocol.md`](docs/protocol.md) and [`docs/manual-test-checklist.md`](docs/manual-test-checklist.md). Android needs `INTERNET` permission for local UDP sockets. The app and companion do not use analytics or cloud services. The pairing key is included in the setup link; keep it private. When reconnection is enabled, Android stores the key encrypted with a Keystore-backed AES-GCM key.
+See [`docs/protocol.md`](docs/protocol.md) and [`docs/manual-test-checklist.md`](docs/manual-test-checklist.md). Android needs `INTERNET` permission for local UDP sockets. The app and companion do not use analytics or cloud services. The pairing key is included in the setup link; keep it private. When reconnection is enabled, Android stores the key encrypted with a Keystore-backed AES-GCM key. A remembered Bluetooth host is stored as an address only, with no pairing secret, because Bluetooth HID authenticates at the Bluetooth layer.
 
 ## Current limitations
 

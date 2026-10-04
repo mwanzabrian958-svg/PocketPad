@@ -239,6 +239,15 @@ class ConnectionManager @Inject constructor(
         activeTransport.send(state)
     }
 
+    /**
+     * Applies the low-power preference to the transports that poll the host. Bluetooth HID
+     * is driven by the platform stack and is not throttled here.
+     */
+    fun setLowPower(enabled: Boolean) {
+        wifiTransport.lowPower = enabled
+        usbTransport.lowPower = enabled
+    }
+
     fun disconnect() {
         autoMode = false
         autoCandidates = emptyList()

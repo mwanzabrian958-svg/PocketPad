@@ -41,6 +41,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 
 data class ConnectionPickerState(
     val selectedMethod: ConnectionMethod? = null,
@@ -99,10 +100,16 @@ class PocketPadViewModel @Inject constructor(
     private val _buttonMapping = MutableStateFlow(ButtonMapping.identity())
     val buttonMapping: StateFlow<Map<Int, Int>> = _buttonMapping.asStateFlow()
     private var pressedSourceButtons = 0
-    private var turboReleasedButtons = 0
+    private val turboReleased = mutableMapOf<Int, AtomicBoolean>()
 
     init {
         refreshMethodStatuses(false, false)
+        viewModelScope.launch {
+            // Keep the transports in sync with the saved low-power preference.
+            settings.map { it.lowPower }.distinctUntilChanged().collect { enabled ->
+                connectionManager.setLowPower(enabled)
+            }
+        }
         viewModelScope.launch {
             connection.map { it.connected to it.method }
                 .distinctUntilChanged()
@@ -126,7 +133,7 @@ class PocketPadViewModel @Inject constructor(
                 selectedMethod = remembered,
                 rememberChoice = current.rememberConnection,
                 host = current.rememberedHost,
-                port = current.rememberedPort.toString()
+                port = current.rememberedPort.takeIf { it in 1..65535 }?.toString() ?: "26760"
             )
             if (current.rememberConnection &&
                 (remembered == ConnectionMethod.WIFI || remembered == ConnectionMethod.USB ||
@@ -139,7 +146,7 @@ class PocketPadViewModel @Inject constructor(
                         selectedMethod = remembered,
                         host = saved.host,
                         bluetoothHostAddress = if (remembered == ConnectionMethod.BLUETOOTH) saved.host else "",
-                        port = saved.port.toString(),
+                        port = saved.port.takeIf { it in 1..65535 }?.toString() ?: "26760",
                         pairingKey = saved.pairingKey,
                         connecting = true
                     )
@@ -493,8 +500,8 @@ class PocketPadViewModel @Inject constructor(
             try {
                 connectionManager.connectBluetooth(address)
                 if (_picker.value.rememberChoice) {
-                    settingsRepository.clearRememberedConnection()
-                    settingsRepository.saveRememberedConnection(address, 26760, "")
+                    // Bluetooth HID needs no shared secret; remember only the bonded host.
+                    settingsRepository.saveRememberedBluetoothHost(address)
                     settingsRepository.setRememberedMethod(ConnectionMethod.BLUETOOTH.label)
                 }
                 _picker.value = _picker.value.copy(connecting = false)
@@ -588,26 +595,29 @@ class PocketPadViewModel @Inject constructor(
 
     fun button(mask: Int, pressed: Boolean) {
         turboJobs.remove(mask)?.cancel()
+        // Drop the per-mask turbo flag so a later press cannot inherit a stale "released".
+        turboReleased.remove(mask)
         if (pressed) {
             pressedSourceButtons = pressedSourceButtons or mask
             playFeedback()
         } else {
             pressedSourceButtons = pressedSourceButtons and mask.inv()
-            turboReleasedButtons = turboReleasedButtons and mask.inv()
         }
         updateMappedButtons()
         if (pressed && settings.value.turboMode) {
+            val released = AtomicBoolean(false)
             turboJobs[mask] = viewModelScope.launch {
                 delay(300)
                 while (isActive) {
-                    turboReleasedButtons = turboReleasedButtons or mask
+                    released.set(true)
                     updateMappedButtons()
                     delay(60)
-                    turboReleasedButtons = turboReleasedButtons and mask.inv()
+                    released.set(false)
                     updateMappedButtons()
                     delay(60)
                 }
             }
+            turboReleased[mask] = released
         }
     }
 
@@ -622,10 +632,9 @@ class PocketPadViewModel @Inject constructor(
     }
 
     fun axis(leftStick: Boolean, x: Float, y: Float) {
-        val sensitivity = settings.value.sensitivity
         val current = _input.value
-        val next = if (leftStick) current.copy(leftX = x * sensitivity, leftY = y * sensitivity)
-        else current.copy(rightX = x * sensitivity, rightY = y * sensitivity)
+        val next = if (leftStick) current.copy(leftX = x, leftY = y)
+        else current.copy(rightX = x, rightY = y)
         _input.value = next
         sendInput(next)
     }
@@ -640,21 +649,25 @@ class PocketPadViewModel @Inject constructor(
     fun releaseAllButtons() {
         turboJobs.values.forEach(Job::cancel)
         turboJobs.clear()
+        turboReleased.clear()
         pressedSourceButtons = 0
-        turboReleasedButtons = 0
         _input.value = ControllerState()
         sendInput(_input.value)
     }
 
     private fun updateMappedButtons() {
-        val effectiveButtons = pressedSourceButtons and turboReleasedButtons.inv()
+        val effectiveButtons = pressedSourceButtons and turboReleased.entries
+            .filter { it.value.get() }
+            .fold(0) { mask, entry -> mask or entry.key }
+            .inv()
         val next = _input.value.copy(buttons = ButtonMapping.translate(effectiveButtons, _buttonMapping.value))
         _input.value = next
         sendInput(next)
     }
 
     private fun sendInput(state: ControllerState) {
-        connectionManager.updateInput(state.normalized(settings.value.deadZone))
+        val current = settings.value
+        connectionManager.updateInput(state.shaped(current.deadZone, current.sensitivity))
     }
 
     private fun playFeedback() {

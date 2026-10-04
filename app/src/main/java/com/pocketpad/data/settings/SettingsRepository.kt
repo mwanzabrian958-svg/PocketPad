@@ -115,12 +115,33 @@ class SettingsRepository @Inject constructor(
         }
     }
 
+    /**
+     * Remembers a bonded Bluetooth host. Bluetooth HID authenticates at the Bluetooth
+     * layer, so no pairing secret is stored and [hasRememberedPairingKey] stays false.
+     */
+    suspend fun saveRememberedBluetoothHost(address: String) {
+        require(address.isNotBlank()) { "Bluetooth host address must not be blank." }
+        context.preferencesDataStore.edit {
+            it[REMEMBERED_HOST] = address.trim()
+            it[REMEMBERED_PORT] = 0
+            it.remove(REMEMBERED_PAIRING_KEY)
+        }
+    }
+
+    /**
+     * Returns the remembered host. Bluetooth entries carry no pairing secret and use port
+     * [BLUETOOTH_PORT], so they are returned with a blank key rather than being rejected.
+     */
     suspend fun loadRememberedConnection(): RememberedConnection? {
         val prefs = context.preferencesDataStore.data.first()
         val host = prefs[REMEMBERED_HOST].orEmpty()
+        if (host.isBlank()) return null
         val port = prefs[REMEMBERED_PORT] ?: 26760
-        val encryptedKey = prefs[REMEMBERED_PAIRING_KEY] ?: return null
-        if (host.isBlank() || port !in 1..65535) return null
+        val encryptedKey = prefs[REMEMBERED_PAIRING_KEY]
+        if (encryptedKey == null) {
+            return if (port == BLUETOOTH_PORT) RememberedConnection(host, port, "") else null
+        }
+        if (port !in 1..65535) return null
         return RememberedConnection(host, port, decrypt(encryptedKey))
     }
 
@@ -134,6 +155,12 @@ class SettingsRepository @Inject constructor(
 
     private companion object {
         const val KEY_ALIAS = "pocketpad_pairing_key_v1"
+
+        /**
+         * Sentinel port marking a remembered entry as a Bluetooth host, which has no
+         * network port and no pairing key.
+         */
+        const val BLUETOOTH_PORT = 0
         const val GCM_IV_LENGTH = 12
         const val GCM_TAG_LENGTH_BITS = 128
         val REMEMBERED_METHOD = stringPreferencesKey("remembered_method")

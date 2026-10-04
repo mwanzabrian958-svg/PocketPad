@@ -18,6 +18,8 @@ import kotlinx.coroutines.withContext
 class WifiTransport : ControllerTransport {
     override val method = ConnectionMethod.WIFI
     @Volatile private var currentState = ControllerState()
+    /** When true the input loop transmits one tick in [LOW_POWER_TICK_DIVISOR], saving battery. */
+    @Volatile var lowPower: Boolean = false
     @Volatile private var socket: DatagramSocket? = null
     @Volatile private var key: ByteArray? = null
     @Volatile var onFailure: ((Exception) -> Unit)? = null
@@ -27,6 +29,8 @@ class WifiTransport : ControllerTransport {
     private var sender: ScheduledExecutorService? = null
     @Volatile private var receiver: Thread? = null
     @Volatile private var lastResponseNanos = 0L
+    private val tickCounter = AtomicInteger()
+    @Volatile private var lastSentState = ControllerState()
 
     override suspend fun connect(host: String, port: Int, pairingKey: String): Int = withContext(Dispatchers.IO) {
         require(port in 1..65535) { "Port must be between 1 and 65535." }
@@ -61,7 +65,9 @@ class WifiTransport : ControllerTransport {
                 val activeKey = key
                 if (activeSocket != null && activeKey != null && !activeSocket.isClosed) {
                     try {
-                        transmit(activeSocket, activeKey, currentState)
+                        if (!lowPower || shouldSendThisTick()) {
+                            transmit(activeSocket, activeKey, currentState)
+                        }
                     } catch (error: Exception) {
                         fail(error)
                     }
@@ -88,6 +94,10 @@ class WifiTransport : ControllerTransport {
         key = null
         sentAtNanos.clear()
         currentState = ControllerState()
+        // A reconnect must not inherit the previous session's throttle phase, or the first
+        // frames of the new link could be skipped while the state still looks unchanged.
+        lastSentState = ControllerState()
+        tickCounter.set(0)
     }
 
     private fun receiveReplies(activeSocket: DatagramSocket, activeKey: ByteArray) {
@@ -128,6 +138,16 @@ class WifiTransport : ControllerTransport {
         onFailure?.invoke(error)
     }
 
+    /**
+     * Low-power mode keeps a base tick running but only transmits every fifth tick
+     * (25 Hz instead of 125 Hz). A changed state is always transmitted on the very next
+     * tick, so a button release is never delayed.
+     */
+    private fun shouldSendThisTick(): Boolean {
+        val tick = tickCounter.incrementAndGet()
+        return tick % LOW_POWER_TICK_DIVISOR == 0 || currentState != lastSentState
+    }
+
     private fun transmit(socket: DatagramSocket, key: ByteArray, state: ControllerState): Int {
         val now = System.currentTimeMillis()
         val nextSequence = sequence.getAndIncrement()
@@ -137,8 +157,14 @@ class WifiTransport : ControllerTransport {
             sentAtNanos.remove(oldest)
         }
         val bytes = ProtocolCodec.encode(state, nextSequence, now, key)
+        lastSentState = state
         socket.send(DatagramPacket(bytes, bytes.size))
         return nextSequence
+    }
+
+    private companion object {
+        /** Transmit 1-in-5 ticks in low-power mode: 125 Hz base tick to 25 Hz output. */
+        const val LOW_POWER_TICK_DIVISOR = 5
     }
 
     private fun roundTripMillis(packet: ByteArray, receivedAtNanos: Long): Int? {

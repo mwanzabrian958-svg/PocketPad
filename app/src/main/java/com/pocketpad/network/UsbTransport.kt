@@ -18,6 +18,8 @@ import kotlinx.coroutines.withContext
 class UsbTransport : ControllerTransport {
     override val method = ConnectionMethod.USB
     @Volatile private var currentState = ControllerState()
+    /** When true the input loop throttles to 25 Hz instead of 125 Hz, saving battery. */
+    @Volatile var lowPower: Boolean = false
     @Volatile private var socket: Socket? = null
     @Volatile var onFailure: ((Exception) -> Unit)? = null
     @Volatile var onLatency: ((Int) -> Unit)? = null
@@ -27,6 +29,8 @@ class UsbTransport : ControllerTransport {
     @Volatile private var receiver: Thread? = null
     @Volatile private var lastResponseNanos = 0L
     private val writeLock = Any()
+    private val tickCounter = AtomicInteger()
+    @Volatile private var lastSentState = ControllerState()
 
     override suspend fun connect(host: String, port: Int, pairingKey: String): Int = withContext(Dispatchers.IO) {
         require(port in 1..65535) { "Port must be between 1 and 65535." }
@@ -54,7 +58,9 @@ class UsbTransport : ControllerTransport {
                 val active = socket
                 if (active != null && active.isConnected && !active.isClosed) {
                     try {
-                        synchronized(writeLock) { writeFrame(active, secret, currentState) }
+                        synchronized(writeLock) {
+                            if (!lowPower || shouldSendThisTick()) writeFrame(active, secret, currentState)
+                        }
                     } catch (error: Exception) {
                         fail(error)
                     }
@@ -80,6 +86,10 @@ class UsbTransport : ControllerTransport {
         socket = null
         sentAtNanos.clear()
         currentState = ControllerState()
+        // A reconnect must not inherit the previous session's throttle phase, or the first
+        // frames of the new link could be skipped while the state still looks unchanged.
+        lastSentState = ControllerState()
+        tickCounter.set(0)
     }
 
     private fun receiveReplies(activeSocket: Socket, activeKey: ByteArray) {
@@ -113,6 +123,7 @@ class UsbTransport : ControllerTransport {
         sentAtNanos[nextSequence] = sentAt
         if (sentAtNanos.size > 256) sentAtNanos.remove(nextSequence - 256)
         val packet = ProtocolCodec.encode(state, nextSequence, System.currentTimeMillis(), key)
+        lastSentState = state
         socket.getOutputStream().write(packet)
         socket.getOutputStream().flush()
     }
@@ -129,6 +140,19 @@ class UsbTransport : ControllerTransport {
         if (socket == null) return
         disconnect()
         onFailure?.invoke(error)
+    }
+
+    /**
+     * Low-power mode transmits 1-in-5 ticks (25 Hz instead of 125 Hz), but always sends
+     * immediately when the state changed so a button release is never delayed.
+     */
+    private fun shouldSendThisTick(): Boolean {
+        val tick = tickCounter.incrementAndGet()
+        return tick % LOW_POWER_TICK_DIVISOR == 0 || currentState != lastSentState
+    }
+
+    private companion object {
+        const val LOW_POWER_TICK_DIVISOR = 5
     }
 
     private fun java.io.InputStream.readFully(buffer: ByteArray) {

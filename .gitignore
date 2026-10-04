@@ -40,3 +40,11 @@ htmlcov/
 .env
 .env.*
 !.env.example
+
+# Local build/test scratch from interactive sessions (logs, UI dumps, screenshots)
+*.log
+/run_ut*.bat
+/ui*.xml
+/pp*.png
+/uidump.py
+/pp_headless/

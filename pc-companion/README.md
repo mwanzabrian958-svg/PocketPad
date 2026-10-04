@@ -36,6 +36,14 @@ Enable USB tethering in Android network settings and connect the PC to the phone
 
 Controller output uses Xbox-style button ordering. This program does not install drivers or request administrator privileges. Bluetooth HID works without the PC Companion, but support depends on the phone's Bluetooth HID Device profile.
 
+## Tests
+
+The tests use the standard library `unittest`, so no test dependency is required. Name the test modules explicitly, because `tests/` is not a package:
+
+```powershell
+python -m unittest tests.test_protocol tests.test_discovery -v
+```
+
 ## Packaging
 
 Install the pinned dependencies, then run PyInstaller on each target operating system:

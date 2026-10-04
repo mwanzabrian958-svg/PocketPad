@@ -570,10 +570,7 @@ private fun ConnectionPickerSheet(
                                     onFindHosts, onSelectHost, scanSetupCode, qrScanMessage
                                 )
                                 ConnectionMethod.USB -> UsbSetupFields(
-                                    state, onKeyChanged, onQrTextChanged, scanSetupCode, qrScanMessage,
-                                    onOpenDeveloperSettings = {
-                                        openSystemSettings(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
-                                    }
+                                    state, onKeyChanged, onQrTextChanged, scanSetupCode, qrScanMessage
                                 )
                                 ConnectionMethod.BLUETOOTH -> BluetoothSetupFields(
                                     state = state,
@@ -790,8 +787,7 @@ private fun UsbSetupFields(
     onKeyChanged: (String) -> Unit,
     onQrTextChanged: (String) -> Unit,
     onScanQr: () -> Unit,
-    qrScanMessage: String?,
-    onOpenDeveloperSettings: () -> Unit
+    qrScanMessage: String?
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(start = 6.dp, end = 6.dp),
@@ -799,17 +795,15 @@ private fun UsbSetupFields(
     ) {
         Text(
             if (state.usbCableConnected) {
-                "USB cable detected. Enable USB debugging and authorize this PC, then choose “Set up USB cable (ADB)” in the PC Companion."
+                "USB cable detected. On this phone, open Android Settings, choose About phone, " +
+                    "tap Build number seven times to unlock Developer options, then turn on USB debugging " +
+                    "and allow this PC. After that, choose “Set up USB cable (ADB)” in the PC Companion."
             } else {
                 "Connect the phone to this PC with a data-capable USB cable. Cable status is monitored while PocketPad is open."
             },
             color = Color(0xFFBEC8DF),
             fontSize = 13.sp
         )
-        OutlinedButton(
-            onClick = onOpenDeveloperSettings,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-        ) { Text("Open Developer options") }
         Text(
             if (state.usbCableConnected) "Cable connected · reconnects automatically if USB was selected"
             else "No USB data cable detected",
@@ -1432,7 +1426,7 @@ private fun SettingsScreen(
         item { SettingSwitch("Turbo Mode", settings.turboMode) { updateSettings { setTurboMode(it) } } }
         item { SettingSwitch("Vibration / Haptics", settings.haptics) { updateSettings { setHaptics(it) } } }
         item { SettingSwitch("Audio Feedback", settings.audioFeedback) { updateSettings { setAudioFeedback(it) } } }
-        item { SettingSwitch("Low-power effects", settings.lowPower) { updateSettings { setLowPower(it) } } }
+        item { SettingSwitch("Low-power input (25 Hz)", settings.lowPower) { updateSettings { setLowPower(it) } } }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = Panel)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {

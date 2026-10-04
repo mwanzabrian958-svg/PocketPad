@@ -26,7 +26,8 @@ Button bits: D-pad up, down, left, right (0–3); A, B, X, Y (4–7); LB, RB (8�
 
 ## Reliability and security
 
-- Send the complete controller state on changes and at 125 Hz while connected; never depend on deltas.
+- Send the complete controller state on changes and at 125 Hz while connected; never depend on deltas. Wi-Fi and USB resample on a scheduler, and Bluetooth HID repeats its last report at the same rate because the HID link has no retransmit. With "Low-power input" enabled, the Wi-Fi and USB loops transmit 1-in-5 ticks (25 Hz) but still send immediately whenever the state changes, so button release is never delayed.
+- Stick input is shaped, not scaled: the dead zone is applied to the raw physical position first, then a response curve controlled by sensitivity. Full deflection always reaches full scale at every sensitivity; sensitivity changes feel near center and never reduce the usable range.
 - The Companion authenticates before applying input, checks the derived session ID and a five-second timestamp window, and rejects duplicate, old, or reordered sequence numbers.
 - A 200 ms receiver watchdog writes neutral input after packets stop.
 - The companion echoes only authenticated datagrams to support latency measurement.
