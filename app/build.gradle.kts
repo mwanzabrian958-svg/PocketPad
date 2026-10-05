@@ -20,9 +20,9 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
-        // The Hilt Gradle plugin swaps in HiltTestApplication for androidTest automatically.
-        // This must stay an Instrumentation; naming HiltTestApplication here crashes at startup.
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Boots PocketPadTestApplication (@CustomTestApplication over the production app) so
+        // @HiltAndroidTest classes never load the real @HiltAndroidApp PocketPadApplication.
+        testInstrumentationRunner = "com.pocketpad.PocketPadTestRunner"
     }
 
     buildTypes {

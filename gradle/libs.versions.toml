@@ -12,7 +12,7 @@ room = "2.6.1"
 coroutines = "1.10.1"
 junit = "4.13.2"
 androidx-junit = "1.2.1"
-espresso = "3.6.1"
+espresso = "3.7.0"
 play-services-code-scanner = "16.1.0"
 
 [libraries]
