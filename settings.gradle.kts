@@ -26,6 +26,18 @@ val relocatedBuildRoot: File? = providers
     .orNull
     ?.takeIf { it.isNotBlank() }
     ?.let { File(it) }
+    ?: run {
+        val projectPath = settingsDir.absolutePath
+        if (projectPath.contains("OneDrive", ignoreCase = true) ||
+            projectPath.contains("Dropbox", ignoreCase = true) ||
+            projectPath.contains("Google Drive", ignoreCase = true)) {
+            val fallback = File(System.getProperty("java.io.tmpdir"), "PocketPadBuild")
+            println("PocketPad: Cloud-sync folder detected. Automatically relocating build directory to: ${fallback.absolutePath}")
+            fallback
+        } else {
+            null
+        }
+    }
 
 if (relocatedBuildRoot != null) {
     val buildRoot = relocatedBuildRoot

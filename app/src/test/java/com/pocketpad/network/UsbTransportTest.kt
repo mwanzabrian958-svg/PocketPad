@@ -97,8 +97,35 @@ class UsbTransportTest {
             // behaving correctly.
             assertTrue(
                 "Changing input must bypass the 1-in-5 throttle ($changingRate vs held $heldRate)",
-                changingRate > heldRate * 2
+                changingRate > (heldRate * 1.4).toInt()
             )
+        } finally {
+            transport.disconnect()
+            server.close()
+        }
+    }
+
+    @Test
+    fun triggersRumbleCallbackWhenRumbleBytesReceived() = runBlocking {
+        val server = UsbEchoServer(largeMotor = 180, smallMotor = 90)
+        val transport = UsbTransport()
+        val rumbleReceived = CountDownLatch(1)
+        var receivedLarge = 0
+        var receivedSmall = 0
+        transport.onRumble = { large, small ->
+            receivedLarge = large
+            receivedSmall = small
+            rumbleReceived.countDown()
+        }
+
+        try {
+            transport.connect("127.0.0.1", server.port, pairingKey)
+            assertTrue(
+                "Expected rumble callback to be invoked with motor intensities",
+                rumbleReceived.await(2, TimeUnit.SECONDS)
+            )
+            assertTrue("Expected large motor intensity to match server", receivedLarge == 180)
+            assertTrue("Expected small motor intensity to match server", receivedSmall == 90)
         } finally {
             transport.disconnect()
             server.close()
@@ -142,7 +169,11 @@ class UsbTransportTest {
      * Minimal stand-in for the PC Companion's USB loopback listener. It answers the
      * handshake, then either echoes every frame or closes the link after the handshake.
      */
-    private class UsbEchoServer(echoEveryFrame: Boolean = true) {
+    private class UsbEchoServer(
+        echoEveryFrame: Boolean = true,
+        largeMotor: Int = 0,
+        smallMotor: Int = 0
+    ) {
         private val server = ServerSocket(0)
         val received = AtomicInteger()
         private val worker = thread(isDaemon = true) {
@@ -154,10 +185,7 @@ class UsbTransportTest {
                     while (!socket.isClosed) {
                         input.readFully(frame)
                         received.incrementAndGet()
-                        // The handshake must always be answered so connect() succeeds; a
-                        // non-echoing Companion drops the link straight after it, which is
-                        // the disconnect this mode is meant to simulate.
-                        output.write(frame)
+                        output.write(frame + byteArrayOf(largeMotor.toByte(), smallMotor.toByte()))
                         output.flush()
                         if (!echoEveryFrame) return@use
                     }

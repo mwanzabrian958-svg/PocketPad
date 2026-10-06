@@ -52,6 +52,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -65,6 +66,7 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -1008,12 +1010,33 @@ private fun ControllerScreen(
     onTrigger: (Boolean, Float) -> Unit,
     updateSettings: (suspend com.pocketpad.data.settings.SettingsRepository.() -> Unit) -> Unit
 ) {
+    val bgBrush = when (settings.controllerSkin) {
+        "Cyberpunk" -> Brush.horizontalGradient(listOf(Color(0xFF220722), Color(0xFF291125), Color(0xFF350818)))
+        "Transparent Sleek" -> Brush.horizontalGradient(listOf(Color(0xFF0F172A), Color(0xFF1E293B), Color(0xFF0F172A)))
+        "Retro Arcade" -> Brush.horizontalGradient(listOf(Color(0xFF0D1B2A), Color(0xFF1B263B), Color(0xFF415A77)))
+        else -> Brush.horizontalGradient(listOf(Color(0xFF071722), Color(0xFF111729), Color(0xFF151025)))
+    }
+    val leftGripColor = when (settings.controllerSkin) {
+        "Cyberpunk" -> Color(0x35FF007F)
+        "Transparent Sleek" -> Color(0x15FFFFFF)
+        "Retro Arcade" -> Color(0x401D3557)
+        else -> Color(0x301A4A5C)
+    }
+    val rightGripColor = when (settings.controllerSkin) {
+        "Cyberpunk" -> Color(0x35FFD700)
+        "Transparent Sleek" -> Color(0x15FFFFFF)
+        "Retro Arcade" -> Color(0x40457B9D)
+        else -> Color(0x301D1738)
+    }
+    val borderStroke = when (settings.controllerSkin) {
+        "Cyberpunk" -> BorderStroke(1.dp, Color(0xFFFF007F))
+        "Transparent Sleek" -> androidx.compose.foundation.BorderStroke(1.dp, Color(0x66FFFFFF))
+        "Retro Arcade" -> androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE63946))
+        else -> androidx.compose.foundation.BorderStroke(1.dp, Color(0x6464E7F2))
+    }
+
     BoxWithConstraints(
-        Modifier.fillMaxSize().background(
-            Brush.horizontalGradient(
-                listOf(Color(0xFF071722), Color(0xFF111729), Color(0xFF151025))
-            )
-        )
+        Modifier.fillMaxSize().background(bgBrush)
     ) {
         val scale = minOf(maxWidth.value / 900f, maxHeight.value / 430f).coerceIn(0.72f, 1.35f)
         val availableWidth = maxWidth
@@ -1021,23 +1044,36 @@ private fun ControllerScreen(
         val edge = availableWidth * 0.055f
 
         Box(Modifier.fillMaxSize()) {
+            // Central Gamepad Chassis Bridge
+            Surface(
+                modifier = Modifier.align(Alignment.Center)
+                    .width(availableWidth * 0.55f)
+                    .height(availableHeight * 0.58f),
+                shape = RoundedCornerShape(32.dp * scale),
+                color = leftGripColor.copy(alpha = 0.5f),
+                border = borderStroke
+            ) {}
+
+            // Ergonomic Left Handgrip
             Surface(
                 modifier = Modifier.align(Alignment.CenterStart)
-                    .padding(start = availableWidth * 0.025f)
-                    .width(availableWidth * 0.46f)
-                    .height(availableHeight * 0.64f),
-                shape = RoundedCornerShape(54.dp * scale),
-                color = Color(0x301A4A5C),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x4464E7F2))
+                    .padding(start = availableWidth * 0.015f)
+                    .width(availableWidth * 0.44f)
+                    .height(availableHeight * 0.72f),
+                shape = RoundedCornerShape(topStart = 48.dp * scale, topEnd = 32.dp * scale, bottomStart = 80.dp * scale, bottomEnd = 48.dp * scale),
+                color = leftGripColor,
+                border = borderStroke
             ) {}
+
+            // Ergonomic Right Handgrip
             Surface(
                 modifier = Modifier.align(Alignment.CenterEnd)
-                    .padding(end = availableWidth * 0.025f)
-                    .width(availableWidth * 0.46f)
-                    .height(availableHeight * 0.64f),
-                shape = RoundedCornerShape(54.dp * scale),
-                color = Color(0x301D1738),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x44B996FF))
+                    .padding(end = availableWidth * 0.015f)
+                    .width(availableWidth * 0.44f)
+                    .height(availableHeight * 0.72f),
+                shape = RoundedCornerShape(topStart = 32.dp * scale, topEnd = 48.dp * scale, bottomStart = 48.dp * scale, bottomEnd = 80.dp * scale),
+                color = rightGripColor,
+                border = borderStroke
             ) {}
 
             Row(
@@ -1515,6 +1551,28 @@ private fun SettingsScreen(
                     }
                     HorizontalDivider(color = Color(0x443F526E))
                     Text("Controller input can use the PC Companion over Wi-Fi or USB, or Bluetooth HID on supported phones. Direct console connections are not provided.", color = Color(0xFFBEC8DF), fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
+                }
+            }
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = Panel)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Controller Skin / UI Theme", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Text("Choose your preferred visual gamepad skin.", color = Color(0xFFBEC8DF), fontSize = 12.sp)
+                    val skins = listOf("Neon Dark", "Cyberpunk", "Transparent Sleek", "Retro Arcade")
+                    skins.forEach { skin ->
+                        Row(
+                            Modifier.fillMaxWidth().clickable { updateSettings { setControllerSkin(skin) } }.padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = settings.controllerSkin == skin,
+                                onClick = { updateSettings { setControllerSkin(skin) } }
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(skin, color = Color.White)
+                        }
+                    }
                 }
             }
         }

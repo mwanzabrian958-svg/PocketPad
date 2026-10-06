@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sys
-from typing import Protocol
+from typing import Callable, Protocol
 
 from .protocol import ControllerState
 
@@ -28,6 +28,8 @@ class VirtualController(Protocol):
     name: str
 
     def apply(self, state: ControllerState) -> None: ...
+
+    def register_rumble_callback(self, callback: Callable[[int, int], None]) -> None: ...
 
     def close(self) -> None: ...
 
@@ -71,6 +73,16 @@ class WindowsXboxController:
         self._pad.left_trigger(value=xusb_trigger(state.left_trigger))
         self._pad.right_trigger(value=xusb_trigger(state.right_trigger))
         self._pad.update()
+
+    def register_rumble_callback(self, callback: Callable[[int, int], None]) -> None:
+        self.rumble_callback = callback
+        try:
+            def _notification(client, target, large_motor, small_motor, led_number):
+                if hasattr(self, "rumble_callback") and self.rumble_callback:
+                    self.rumble_callback(large_motor, small_motor)
+            self._pad.register_notification(_notification)
+        except Exception:
+            pass
 
     def close(self) -> None:
         self.apply(ControllerState.neutral())
@@ -133,9 +145,55 @@ class LinuxUinputController:
             self._pad.write(self._ecodes.EV_ABS, axis, value)
         self._pad.syn()
 
+    def register_rumble_callback(self, callback: Callable[[int, int], None]) -> None:
+        self.rumble_callback = callback
+
     def close(self) -> None:
         self.apply(ControllerState.neutral())
         self._pad.close()
+
+
+class MacGameController:
+    name = "Apple GameController (macOS)"
+
+    def __init__(self) -> None:
+        try:
+            import objc
+            from GameController import GCController
+        except ImportError as error:
+            raise RuntimeError(
+                "macOS emulation needs pyobjc and pyobjc-framework-GameController."
+            ) from error
+        self._gc = GCController
+        self._controller = None
+        if hasattr(GCController, "supportsWirelessController") and GCController.supportsWirelessController():
+            try:
+                self._controller = GCController.controllerWithMicroGamepad()
+            except Exception:
+                pass
+        if not self._controller:
+            controllers = GCController.controllers()
+            if controllers:
+                self._controller = controllers[0]
+
+    def apply(self, state: ControllerState) -> None:
+        if not self._controller:
+            return
+        profile = getattr(self._controller, "extendedGamepad", None) or getattr(self._controller, "microGamepad", None)
+        if not profile:
+            return
+        if hasattr(profile, "leftThumbstick") and profile.leftThumbstick():
+            profile.leftThumbstick().setXAxis_(max(-1.0, min(1.0, state.left_x / 32767.0)))
+            profile.leftThumbstick().setYAxis_(max(-1.0, min(1.0, state.left_y / 32767.0)))
+        if hasattr(profile, "rightThumbstick") and profile.rightThumbstick():
+            profile.rightThumbstick().setXAxis_(max(-1.0, min(1.0, state.right_x / 32767.0)))
+            profile.rightThumbstick().setYAxis_(max(-1.0, min(1.0, state.right_y / 32767.0)))
+
+    def register_rumble_callback(self, callback: Callable[[int, int], None]) -> None:
+        self.rumble_callback = callback
+
+    def close(self) -> None:
+        self.apply(ControllerState.neutral())
 
 
 def create_virtual_controller() -> VirtualController:
@@ -143,4 +201,6 @@ def create_virtual_controller() -> VirtualController:
         return WindowsXboxController()
     if sys.platform.startswith("linux"):
         return LinuxUinputController()
-    raise RuntimeError("This companion build has no native macOS virtual controller. Use Bluetooth mode.")
+    if sys.platform == "darwin":
+        return MacGameController()
+    raise RuntimeError("This companion build has no virtual controller support for this platform.")

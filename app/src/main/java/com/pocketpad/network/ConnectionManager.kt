@@ -41,6 +41,7 @@ class ConnectionManager @Inject constructor(
     @Volatile private var failoverJob: Job? = null
     private val _connection = MutableStateFlow(LiveConnection())
     val connection: StateFlow<LiveConnection> = _connection.asStateFlow()
+    @Volatile var onRumble: ((largeMotor: Int, smallMotor: Int) -> Unit)? = null
 
     init {
         val onFailure: (Exception) -> Unit = ::handleTransportFailure
@@ -48,11 +49,17 @@ class ConnectionManager @Inject constructor(
             val current = _connection.value
             if (current.connected) _connection.value = current.copy(latencyMillis = latency)
         }
+        val handleRumble: (Int, Int) -> Unit = { large, small ->
+            onRumble?.invoke(large, small)
+        }
         wifiTransport.onFailure = onFailure
         usbTransport.onFailure = onFailure
         bluetoothTransport.onFailure = onFailure
         wifiTransport.onLatency = onLatency
         usbTransport.onLatency = onLatency
+        wifiTransport.onRumble = handleRumble
+        usbTransport.onRumble = handleRumble
+        bluetoothTransport.onRumble = handleRumble
     }
 
     suspend fun connectWifi(host: String, port: Int, key: String) {

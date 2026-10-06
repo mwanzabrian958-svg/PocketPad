@@ -24,7 +24,9 @@ import com.pocketpad.network.ConnectionMethod
 import com.pocketpad.network.LiveConnection
 import com.pocketpad.network.MethodStatus
 import com.pocketpad.network.OptionReadiness
+import com.pocketpad.service.ConnectionService
 import com.pocketpad.protocol.ControllerState
+import com.pocketpad.protocol.ProtocolCodec
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -104,6 +106,7 @@ class PocketPadViewModel @Inject constructor(
 
     init {
         refreshMethodStatuses(false, false)
+        connectionManager.onRumble = ::playRumble
         viewModelScope.launch {
             // Keep the transports in sync with the saved low-power preference.
             settings.map { it.lowPower }.distinctUntilChanged().collect { enabled ->
@@ -116,6 +119,26 @@ class PocketPadViewModel @Inject constructor(
                 .collect {
                     refreshMethodStatuses(connection.value.method == ConnectionMethod.WIFI, false)
                 }
+        }
+        viewModelScope.launch {
+            connection.map { it.connected }
+                .distinctUntilChanged()
+                .collect { connected ->
+                    if (connected) {
+                        runCatching { ConnectionService.startService(appContext) }
+                    } else {
+                        runCatching { ConnectionService.stopService(appContext) }
+                    }
+                }
+        }
+        viewModelScope.launch {
+            var previousConnected = false
+            connection.map { it.connected }.distinctUntilChanged().collect { connected ->
+                if (connected && !previousConnected) {
+                    playConnectSuccessSound()
+                }
+                previousConnected = connected
+            }
         }
         viewModelScope.launch {
             listOf(
@@ -545,6 +568,17 @@ class PocketPadViewModel @Inject constructor(
             )
             return
         }
+        // USB reuses the same authenticated PPD1 framing as Wi-Fi, so reject a malformed key here.
+        // Without this the failure surfaces later as a raw socket/handshake error and the generic
+        // "check the cable and ADB tunnel" advice blames hardware for what is really a bad key.
+        val keyError = runCatching { ProtocolCodec.parseKey(selection.pairingKey) }.exceptionOrNull()
+        if (keyError != null) {
+            _picker.value = selection.copy(
+                error = keyError.message ?: "The pairing key is not valid.",
+                fixAction = "Re-paste the pairing link from the PC Companion"
+            )
+            return
+        }
         _picker.value = selection.copy(connecting = true, error = null, fixAction = null)
         connectJob?.cancel()
         connectJob = viewModelScope.launch {
@@ -679,6 +713,37 @@ class PocketPadViewModel @Inject constructor(
                 toneGenerator = it
             }
             generator.startTone(ToneGenerator.TONE_PROP_BEEP, 28)
+        }
+    }
+
+    private fun playConnectSuccessSound() {
+        if (!settings.value.audioFeedback) return
+        viewModelScope.launch {
+            val generator = toneGenerator ?: ToneGenerator(AudioManager.STREAM_SYSTEM, 30).also {
+                toneGenerator = it
+            }
+            try {
+                generator.startTone(ToneGenerator.TONE_PROP_ACK, 120)
+                delay(140)
+                generator.startTone(ToneGenerator.TONE_PROP_PROMPT, 160)
+            } catch (_: Exception) {}
+        }
+    }
+
+    private fun playRumble(largeMotor: Int, smallMotor: Int) {
+        if (!settings.value.haptics || vibrator?.hasVibrator() != true) return
+        val maxMotor = maxOf(largeMotor, smallMotor)
+        if (maxMotor <= 0) {
+            vibrator.cancel()
+            return
+        }
+        val amplitude = (maxMotor.coerceIn(1, 255) * (VibrationEffect.DEFAULT_AMPLITUDE.toFloat() / 255f))
+            .toInt().coerceIn(1, 255)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator.vibrate(VibrationEffect.createOneShot(120, amplitude))
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(120)
         }
     }
 

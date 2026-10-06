@@ -23,6 +23,7 @@ class UsbTransport : ControllerTransport {
     @Volatile private var socket: Socket? = null
     @Volatile var onFailure: ((Exception) -> Unit)? = null
     @Volatile var onLatency: ((Int) -> Unit)? = null
+    override var onRumble: ((largeMotor: Int, smallMotor: Int) -> Unit)? = null
     private val sequence = AtomicInteger()
     private val sentAtNanos = ConcurrentHashMap<Int, Long>()
     private var sender: java.util.concurrent.ScheduledExecutorService? = null
@@ -43,11 +44,12 @@ class UsbTransport : ControllerTransport {
         sequence.set(0)
         currentState = ControllerState()
         writeFrame(tcpSocket, secret, currentState)
-        val response = ByteArray(ProtocolCodec.PACKET_SIZE)
+        val response = ByteArray(ProtocolCodec.PACKET_SIZE + 2)
         tcpSocket.getInputStream().readFully(response)
-        val frame = ProtocolCodec.decode(response, secret)
+        val validFrame = response.copyOf(ProtocolCodec.PACKET_SIZE)
+        val frame = ProtocolCodec.decode(validFrame, secret)
         require(frame.sequence == 0) { "USB Companion handshake response did not match the request." }
-        val latency = requireNotNull(roundTripMillis(response, System.nanoTime())) {
+        val latency = requireNotNull(roundTripMillis(validFrame, System.nanoTime())) {
             "USB Companion handshake response did not contain a valid round-trip timestamp."
         }
         lastResponseNanos = System.nanoTime()
@@ -93,16 +95,20 @@ class UsbTransport : ControllerTransport {
     }
 
     private fun receiveReplies(activeSocket: Socket, activeKey: ByteArray) {
-        val response = ByteArray(ProtocolCodec.PACKET_SIZE)
+        val response = ByteArray(ProtocolCodec.PACKET_SIZE + 2)
         var lastLatencyUpdateNanos = 0L
         while (!activeSocket.isClosed && socket === activeSocket) {
             try {
                 activeSocket.getInputStream().readFully(response)
-                ProtocolCodec.decode(response, activeKey)
+                val validFrame = response.copyOf(ProtocolCodec.PACKET_SIZE)
+                ProtocolCodec.decode(validFrame, activeKey)
                 val receivedAt = System.nanoTime()
                 lastResponseNanos = receivedAt
+                val large = response[79].toInt() and 0xFF
+                val small = response[80].toInt() and 0xFF
+                if (large > 0 || small > 0) onRumble?.invoke(large, small)
                 if (receivedAt - lastLatencyUpdateNanos >= TimeUnit.MILLISECONDS.toNanos(250)) {
-                    roundTripMillis(response, receivedAt)?.let { onLatency?.invoke(it) }
+                    roundTripMillis(validFrame, receivedAt)?.let { onLatency?.invoke(it) }
                     lastLatencyUpdateNanos = receivedAt
                 }
             } catch (_: SocketTimeoutException) {

@@ -4,6 +4,7 @@ import com.pocketpad.protocol.ControllerState
 
 interface ControllerTransport {
     val method: ConnectionMethod
+    var onRumble: ((largeMotor: Int, smallMotor: Int) -> Unit)?
     suspend fun connect(host: String, port: Int, pairingKey: String): Int
     fun send(state: ControllerState)
     fun disconnect()

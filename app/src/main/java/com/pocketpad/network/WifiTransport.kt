@@ -24,6 +24,7 @@ class WifiTransport : ControllerTransport {
     @Volatile private var key: ByteArray? = null
     @Volatile var onFailure: ((Exception) -> Unit)? = null
     @Volatile var onLatency: ((Int) -> Unit)? = null
+    override var onRumble: ((largeMotor: Int, smallMotor: Int) -> Unit)? = null
     private val sequence = AtomicInteger()
     private val sentAtNanos = ConcurrentHashMap<Int, Long>()
     private var sender: ScheduledExecutorService? = null
@@ -102,7 +103,7 @@ class WifiTransport : ControllerTransport {
 
     private fun receiveReplies(activeSocket: DatagramSocket, activeKey: ByteArray) {
         activeSocket.soTimeout = 250
-        val response = ByteArray(ProtocolCodec.PACKET_SIZE)
+        val response = ByteArray(128)
         val packet = DatagramPacket(response, response.size)
         var lastLatencyUpdateNanos = 0L
         while (!activeSocket.isClosed && socket === activeSocket) {
@@ -110,11 +111,19 @@ class WifiTransport : ControllerTransport {
                 packet.length = response.size
                 activeSocket.receive(packet)
                 val bytes = response.copyOf(packet.length)
-                val frame = ProtocolCodec.decode(bytes, activeKey)
+                val validFrameBytes = if (bytes.size >= ProtocolCodec.PACKET_SIZE) {
+                    bytes.copyOf(ProtocolCodec.PACKET_SIZE)
+                } else bytes
+                val frame = ProtocolCodec.decode(validFrameBytes, activeKey)
                 val receivedAt = System.nanoTime()
                 lastResponseNanos = receivedAt
+                if (bytes.size >= 81) {
+                    val large = bytes[79].toInt() and 0xFF
+                    val small = bytes[80].toInt() and 0xFF
+                    onRumble?.invoke(large, small)
+                }
                 if (receivedAt - lastLatencyUpdateNanos >= TimeUnit.MILLISECONDS.toNanos(250)) {
-                    roundTripMillis(bytes, receivedAt)?.let { onLatency?.invoke(it) }
+                    roundTripMillis(validFrameBytes, receivedAt)?.let { onLatency?.invoke(it) }
                     lastLatencyUpdateNanos = receivedAt
                 }
             } catch (_: SocketTimeoutException) {

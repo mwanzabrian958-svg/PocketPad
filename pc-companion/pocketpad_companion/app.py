@@ -108,11 +108,14 @@ class Receiver:
         self._log_lock = threading.Lock()
         self._state_lock = threading.Lock()
         self.usb_port = usb_port
+        self.rumble = (0, 0)
         try:
             self.virtual_pad = (
                 virtual_controller_factory() if virtual_controller_factory else create_virtual_controller()
             )
             self.backend_name = self.virtual_pad.name
+            if self.virtual_pad:
+                self.virtual_pad.register_rumble_callback(self._on_rumble)
         except RuntimeError as error:
             self.virtual_pad = None
             self.backend_name = f"Input monitor only: {error}"
@@ -162,7 +165,8 @@ class Receiver:
                     last_sequence = frame.sequence
                     receiver._apply_input(frame, "USB")
                     try:
-                        self.request.sendall(packet)
+                        reply_packet = packet + bytes([receiver.rumble[0], receiver.rumble[1]])
+                        self.request.sendall(reply_packet)
                     except OSError:
                         return
 
@@ -345,10 +349,14 @@ class Receiver:
                 del self.last_sequences[next(iter(self.last_sequences))]
             self._apply_input(frame, peer[0])
             try:
-                self.socket.sendto(data, peer)
+                reply_data = data + bytes([self.rumble[0], self.rumble[1]])
+                self.socket.sendto(reply_data, peer)
             except OSError as error:
                 self.messages.put(f"Could not send latency reply: {error}")
                 self.log("ERROR", f"Could not send latency reply to {peer[0]}: {error}")
+
+    def _on_rumble(self, large: int, small: int) -> None:
+        self.rumble = (large & 0xFF, small & 0xFF)
 
     def _apply_input(self, frame: Frame, peer: str) -> None:
         with self._state_lock:

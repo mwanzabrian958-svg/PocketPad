@@ -26,10 +26,12 @@ data class AppSettings(
     val rememberedMethod: String = "Auto",
     val rememberConnection: Boolean = true,
     val darkTheme: Boolean? = true,
+    val highContrast: Boolean = false,
     val lowPower: Boolean = false,
     val haptics: Boolean = true,
     val audioFeedback: Boolean = false,
     val controllerMode: String = "Xbox",
+    val controllerSkin: String = "Neon Dark",
     val sensitivity: Float = 0.75f,
     val deadZone: Float = 0.15f,
     val turboMode: Boolean = false,
@@ -48,10 +50,12 @@ class SettingsRepository @Inject constructor(
             rememberedMethod = prefs[REMEMBERED_METHOD] ?: "Auto",
             rememberConnection = prefs[REMEMBER_CONNECTION] ?: true,
             darkTheme = prefs[DARK_THEME] ?: true,
+            highContrast = prefs[HIGH_CONTRAST] ?: false,
             lowPower = prefs[LOW_POWER] ?: false,
             haptics = prefs[HAPTICS] ?: true,
             audioFeedback = prefs[AUDIO_FEEDBACK] ?: false,
             controllerMode = prefs[CONTROLLER_MODE] ?: "Xbox",
+            controllerSkin = prefs[CONTROLLER_SKIN] ?: "Neon Dark",
             sensitivity = prefs[SENSITIVITY] ?: 0.75f,
             deadZone = prefs[DEAD_ZONE] ?: 0.15f,
             turboMode = prefs[TURBO_MODE] ?: false,
@@ -79,6 +83,10 @@ class SettingsRepository @Inject constructor(
         context.preferencesDataStore.edit { it[LOW_POWER] = enabled }
     }
 
+    suspend fun setHighContrast(enabled: Boolean) {
+        context.preferencesDataStore.edit { it[HIGH_CONTRAST] = enabled }
+    }
+
     suspend fun setHaptics(enabled: Boolean) {
         context.preferencesDataStore.edit { it[HAPTICS] = enabled }
     }
@@ -90,6 +98,12 @@ class SettingsRepository @Inject constructor(
     suspend fun setControllerMode(mode: String) {
         require(mode == "Xbox" || mode == "PlayStation") { "Unsupported controller button layout." }
         context.preferencesDataStore.edit { it[CONTROLLER_MODE] = mode }
+    }
+
+    suspend fun setControllerSkin(skin: String) {
+        val validSkins = setOf("Neon Dark", "Cyberpunk", "Transparent Sleek", "Retro Arcade")
+        require(skin in validSkins) { "Unsupported controller skin." }
+        context.preferencesDataStore.edit { it[CONTROLLER_SKIN] = skin }
     }
 
     suspend fun setSensitivity(value: Float) {
@@ -169,10 +183,12 @@ class SettingsRepository @Inject constructor(
         val REMEMBERED_PORT = intPreferencesKey("remembered_port")
         val REMEMBERED_PAIRING_KEY = stringPreferencesKey("remembered_pairing_key")
         val DARK_THEME = booleanPreferencesKey("dark_theme")
+        val HIGH_CONTRAST = booleanPreferencesKey("high_contrast")
         val LOW_POWER = booleanPreferencesKey("low_power")
         val HAPTICS = booleanPreferencesKey("haptics")
         val AUDIO_FEEDBACK = booleanPreferencesKey("audio_feedback")
         val CONTROLLER_MODE = stringPreferencesKey("controller_mode")
+        val CONTROLLER_SKIN = stringPreferencesKey("controller_skin")
         val SENSITIVITY = androidx.datastore.preferences.core.floatPreferencesKey("sensitivity")
         val DEAD_ZONE = androidx.datastore.preferences.core.floatPreferencesKey("dead_zone")
         val TURBO_MODE = booleanPreferencesKey("turbo_mode")

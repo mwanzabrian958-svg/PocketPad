@@ -65,7 +65,16 @@ class MainActivity : ComponentActivity() {
             val settings by viewModel.settings.collectAsState()
             val dark = settings.darkTheme ?: isSystemInDarkTheme()
             MaterialTheme(
-                colorScheme = if (dark) {
+                colorScheme = if (settings.highContrast) {
+                    darkColorScheme(
+                        primary = Color(0xFFFFFF00),
+                        secondary = Color(0xFF00FFFF),
+                        background = Color(0xFF000000),
+                        surface = Color(0xFF000000),
+                        onSurface = Color(0xFFFFFFFF),
+                        onPrimary = Color(0xFF000000)
+                    )
+                } else if (dark) {
                     darkColorScheme(
                         primary = Color(0xFF64E7F2),
                         secondary = Color(0xFFB996FF),

@@ -14,6 +14,18 @@ android {
     namespace = "com.pocketpad"
     compileSdk = 36
 
+    signingConfigs {
+        create("release") {
+            val keystoreFile = file("release-key.jks")
+            if (keystoreFile.exists()) {
+                storeFile = keystoreFile
+                storePassword = "your_keystore_password"
+                keyAlias = "pocketpad-key"
+                keyPassword = "your_key_password"
+            }
+        }
+    }
+
     defaultConfig {
         applicationId = "com.pocketpad"
         minSdk = 26
@@ -32,6 +44,12 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            val keystoreFile = file("release-key.jks")
+            if (keystoreFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            } else {
+                signingConfig = signingConfigs.getByName("debug")
+            }
         }
     }
 

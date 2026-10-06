@@ -37,6 +37,7 @@ class BluetoothHidTransport(context: Context) : ControllerTransport {
     @Volatile private var device: BluetoothDevice? = null
     @Volatile private var currentState = ControllerState()
     @Volatile var onFailure: ((Exception) -> Unit)? = null
+    override var onRumble: ((largeMotor: Int, smallMotor: Int) -> Unit)? = null
     @Volatile private var failureReported = AtomicBoolean(false)
     @Volatile private var disconnecting = false
     @Volatile private var profileReady = CompletableFuture<BluetoothHidDevice>()
@@ -102,6 +103,14 @@ class BluetoothHidTransport(context: Context) : ControllerTransport {
                         reportFailure(IllegalStateException("Bluetooth host disconnected."))
                     }
                 }
+            }
+        }
+
+        override fun onSetReport(device: BluetoothDevice?, type: Byte, id: Byte, data: ByteArray?) {
+            if (data != null && data.isNotEmpty()) {
+                val large = data[0].toInt() and 0xFF
+                val small = if (data.size > 1) data[1].toInt() and 0xFF else large
+                onRumble?.invoke(large, small)
             }
         }
     }
