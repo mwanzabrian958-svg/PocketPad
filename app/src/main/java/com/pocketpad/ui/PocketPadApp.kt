@@ -1,5 +1,7 @@
 package com.pocketpad.ui
 
+import android.annotation.SuppressLint
+import androidx.activity.compose.LocalActivity
 import android.app.Activity
 import android.Manifest
 import android.bluetooth.BluetoothAdapter
@@ -121,6 +123,7 @@ private val Green = Color(0xFF5EE2A0)
 private val Panel = Color(0xD91A2033)
 private val Background = Color(0xFF080B18)
 
+@SuppressLint("SourceLockedOrientationActivity")
 @Composable
 fun PocketPadApp(
     navController: NavHostController = rememberNavController(),
@@ -133,7 +136,7 @@ fun PocketPadApp(
     var showPicker by rememberSaveable { mutableStateOf(true) }
     val backStack by navController.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route ?: "connect"
-    val activity = LocalContext.current as? Activity
+    val activity = LocalActivity.current
 
     DisposableEffect(activity, currentRoute) {
         if (activity != null) {

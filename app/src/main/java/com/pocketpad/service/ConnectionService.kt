@@ -81,12 +81,7 @@ class ConnectionService : Service() {
     }
 
     private fun stopForegroundService() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-        } else {
-            @Suppress("DEPRECATION")
-            stopForeground(true)
-        }
+        stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
@@ -128,17 +123,15 @@ class ConnectionService : Service() {
     }
 
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "PocketPad Connection Service",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Shows status of active PocketPad controller network connection"
-            }
-            val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannel(channel)
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "PocketPad Connection Service",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Shows status of active PocketPad controller network connection"
         }
+        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        manager.createNotificationChannel(channel)
     }
 
     override fun onDestroy() {
@@ -153,11 +146,7 @@ class ConnectionService : Service() {
 
         fun startService(context: Context) {
             val intent = Intent(context, ConnectionService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            context.startForegroundService(intent)
         }
 
         fun stopService(context: Context) {

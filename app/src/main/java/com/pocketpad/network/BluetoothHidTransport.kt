@@ -1,5 +1,7 @@
 package com.pocketpad.network
 
+import android.annotation.SuppressLint
+import androidx.annotation.RequiresApi
 import android.Manifest
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
@@ -26,6 +28,8 @@ import kotlinx.coroutines.withContext
 
 class BluetoothHidNotSupportedException(message: String) : IllegalStateException(message)
 
+@SuppressLint("MissingPermission")
+@RequiresApi(Build.VERSION_CODES.P)
 class BluetoothHidTransport(context: Context) : ControllerTransport {
     override val method = ConnectionMethod.BLUETOOTH
     private val appContext = context.applicationContext

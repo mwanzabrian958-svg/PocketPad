@@ -2,6 +2,7 @@ package com.pocketpad.network
 
 import com.pocketpad.protocol.ControllerState
 import android.content.Context
+import android.os.Build
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -11,6 +12,7 @@ import kotlinx.coroutines.Job
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.seconds
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,7 +34,11 @@ class ConnectionManager @Inject constructor(
 ) {
     private val wifiTransport = WifiTransport()
     private val usbTransport = UsbTransport()
-    private val bluetoothTransport = BluetoothHidTransport(context)
+    private val bluetoothTransport = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        BluetoothHidTransport(context)
+    } else {
+        null
+    }
     @Volatile private var activeTransport: ControllerTransport = wifiTransport
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private data class Target(val method: ConnectionMethod, val host: String, val port: Int, val key: String)
@@ -54,12 +60,12 @@ class ConnectionManager @Inject constructor(
         }
         wifiTransport.onFailure = onFailure
         usbTransport.onFailure = onFailure
-        bluetoothTransport.onFailure = onFailure
+        bluetoothTransport?.onFailure = onFailure
         wifiTransport.onLatency = onLatency
         usbTransport.onLatency = onLatency
         wifiTransport.onRumble = handleRumble
         usbTransport.onRumble = handleRumble
-        bluetoothTransport.onRumble = handleRumble
+        bluetoothTransport?.onRumble = handleRumble
     }
 
     suspend fun connectWifi(host: String, port: Int, key: String) {
@@ -107,18 +113,19 @@ class ConnectionManager @Inject constructor(
     suspend fun connectBluetooth(hostAddress: String) {
         try {
             disconnect()
-            activeTransport = bluetoothTransport
-            bluetoothTransport.connect(hostAddress.trim(), 0, "")
+            val bt = bluetoothTransport ?: throw IllegalStateException("Bluetooth gamepad mode requires Android 9 or newer.")
+            activeTransport = bt
+            bt.connect(hostAddress.trim(), 0, "")
             _connection.value = LiveConnection(
                 connected = true,
                 method = ConnectionMethod.BLUETOOTH,
                 host = hostAddress.trim()
             )
         } catch (cancelled: CancellationException) {
-            bluetoothTransport.disconnect()
+            bluetoothTransport?.disconnect()
             throw cancelled
         } catch (error: Exception) {
-            bluetoothTransport.disconnect()
+            bluetoothTransport?.disconnect()
             _connection.value = LiveConnection(error = error.message ?: "Bluetooth gamepad connection failed.")
             throw error
         }
@@ -128,41 +135,33 @@ class ConnectionManager @Inject constructor(
         wifiHost: String,
         wifiPort: Int,
         pairingKey: String,
-        bluetoothHost: String?
+        bluetoothHost: String
     ) {
         disconnect()
-        val candidates = buildList {
-            add(Target(ConnectionMethod.USB, "127.0.0.1", 26762, pairingKey))
-            if (wifiHost.isNotBlank() && wifiPort in 1..65535 && pairingKey.isNotBlank()) {
-                add(Target(ConnectionMethod.WIFI, wifiHost.trim(), wifiPort, pairingKey.trim()))
-            }
-            if (!bluetoothHost.isNullOrBlank()) {
-                add(Target(ConnectionMethod.BLUETOOTH, bluetoothHost, 0, ""))
-            }
-        }
-        require(candidates.isNotEmpty()) { "Choose a Companion host or pair a Bluetooth gamepad host first." }
         autoMode = true
-        val failures = mutableListOf<String>()
-        for ((index, target) in candidates.withIndex()) {
-            try {
-                connectTarget(target)
-                autoCandidates = candidates.drop(index + 1)
-                return
-            } catch (cancelled: CancellationException) {
-                disconnectTransports()
-                autoMode = false
-                autoCandidates = emptyList()
-                throw cancelled
-            } catch (error: Exception) {
-                failures += "${target.method.label}: ${error.message ?: "not available"}"
-                disconnectTransports()
-            }
+        val candidates = mutableListOf<Target>()
+        if (wifiHost.isNotBlank()) {
+            candidates += Target(ConnectionMethod.WIFI, wifiHost, wifiPort, pairingKey)
         }
-        autoMode = false
-        autoCandidates = emptyList()
-        val detail = failures.joinToString("; ")
-        _connection.value = LiveConnection(error = "No automatic connection method succeeded. $detail")
-        throw IllegalStateException("No automatic connection method succeeded. $detail")
+        candidates += Target(ConnectionMethod.USB, "127.0.0.1", 26762, pairingKey)
+        if (bluetoothHost.isNotBlank() && bluetoothTransport != null) {
+            candidates += Target(ConnectionMethod.BLUETOOTH, bluetoothHost, 0, "")
+        }
+        autoCandidates = candidates.drop(1)
+        if (candidates.isEmpty()) {
+            autoMode = false
+            _connection.value = LiveConnection(error = "No connection methods configured for Auto.")
+            return
+        }
+        val first = candidates.first()
+        try {
+            connectTarget(first)
+        } catch (cancelled: CancellationException) {
+            disconnect()
+            throw cancelled
+        } catch (error: Exception) {
+            handleTransportFailure(error)
+        }
     }
 
     private suspend fun connectTarget(target: Target) {
@@ -178,8 +177,9 @@ class ConnectionManager @Inject constructor(
                 _connection.value = LiveConnection(true, ConnectionMethod.WIFI, target.host, latency)
             }
             ConnectionMethod.BLUETOOTH -> {
-                activeTransport = bluetoothTransport
-                bluetoothTransport.connect(target.host, 0, "")
+                val bt = bluetoothTransport ?: error("Bluetooth gamepad mode requires Android 9 or newer.")
+                activeTransport = bt
+                bt.connect(target.host, 0, "")
                 _connection.value = LiveConnection(true, ConnectionMethod.BLUETOOTH, target.host)
             }
             ConnectionMethod.AUTO -> error("Auto is a selection policy, not a transport.")
@@ -207,7 +207,7 @@ class ConnectionManager @Inject constructor(
                                 notice = "Connection switched to ${target.method.label}."
                             )
                             scope.launch {
-                                delay(2_000)
+                                delay(2.seconds)
                                 if (_connection.value.notice == "Connection switched to ${target.method.label}.") {
                                     _connection.value = _connection.value.copy(notice = null)
                                 }
@@ -239,7 +239,7 @@ class ConnectionManager @Inject constructor(
     }
 
     suspend fun prepareBluetoothPairing() {
-        bluetoothTransport.prepareForPairing()
+        bluetoothTransport?.prepareForPairing() ?: throw IllegalStateException("Bluetooth gamepad mode requires Android 9 or newer.")
     }
 
     fun updateInput(state: ControllerState) {
@@ -267,6 +267,6 @@ class ConnectionManager @Inject constructor(
     private fun disconnectTransports() {
         wifiTransport.disconnect()
         usbTransport.disconnect()
-        bluetoothTransport.disconnect()
+        bluetoothTransport?.disconnect()
     }
 }

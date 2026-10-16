@@ -185,7 +185,7 @@ class PocketPadViewModel @Inject constructor(
                                 saved.pairingKey,
                                 _picker.value.bluetoothHostAddress.ifBlank {
                                     _picker.value.pairedBluetoothHosts.firstOrNull()?.second.orEmpty()
-                                }.ifBlank { null }
+                                }.ifBlank { "" }
                             )
                         } else connectionManager.connectWifi(saved.host, saved.port, saved.pairingKey)
                         _picker.value = _picker.value.copy(connecting = false)
@@ -476,7 +476,7 @@ class PocketPadViewModel @Inject constructor(
                         selection.pairingKey,
                         selection.bluetoothHostAddress.ifBlank {
                             _picker.value.pairedBluetoothHosts.firstOrNull()?.second.orEmpty()
-                        }.ifBlank { null }
+                        }.ifBlank { "" }
                     )
                 } else {
                     connectionManager.connectWifi(selection.host, effectivePort, selection.pairingKey)
